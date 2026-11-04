@@ -1,0 +1,142 @@
+{
+ "id": "a50440a7163957a7",
+ "versionId": "a50440a7-1639-57a7-b37b-c357b47af1c2",
+ "name": "4. Отчёт по сделкам в Telegram",
+ "nodes": [
+  {
+   "id": "dea20e5c-d6a8-5172-a682-d9aa23eceb43",
+   "name": "Каждый день в 9:00",
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1.2,
+   "position": [
+    0,
+    200
+   ],
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "cronExpression",
+       "expression": "0 9 * * *"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "77c93e94-bd53-54cf-97bd-1023c3cb7f31",
+   "name": "Отчёт по запросу",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 2,
+   "position": [
+    0,
+    400
+   ],
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "report",
+    "responseMode": "lastNode",
+    "options": {}
+   },
+   "webhookId": "152bee5d-dd99-53c9-ba07-2fb4e7ad7173"
+  },
+  {
+   "id": "d3ed5b7f-e387-5f17-ba21-d6082493716e",
+   "name": "Сделки из CRM",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    240,
+    300
+   ],
+   "parameters": {
+    "method": "GET",
+    "url": "={{ $env.CRM_URL }}/leads",
+    "options": {}
+   }
+  },
+  {
+   "id": "c7097527-eca7-5ba7-93b7-54b64cf712f8",
+   "name": "Сводка",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    460,
+    300
+   ],
+   "parameters": {
+    "jsCode": "const items = $input.first().json.items || [];\nconst paid = items.filter((l) => l.status === 'paid');\nconst sum = paid.reduce((s, l) => s + (l.paid || 0), 0);\nconst text = `📊 Сделки: ${items.length}\\nНовые: ${items.length - paid.length}\\nОплачено: ${paid.length} на ${sum.toLocaleString('ru-RU')} ₽`;\nreturn [{ json: { text, total: items.length, paid: paid.length, sum } }];"
+   }
+  },
+  {
+   "id": "ff6e766f-9dbb-507a-8e79-ded5888ca845",
+   "name": "Telegram: отчёт",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    680,
+    300
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.TG_URL }}/sendMessage",
+    "options": {},
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ chat_id: $env.TG_CHAT, text: $json.text }) }}"
+   }
+  }
+ ],
+ "connections": {
+  "Каждый день в 9:00": {
+   "main": [
+    [
+     {
+      "node": "Сделки из CRM",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Отчёт по запросу": {
+   "main": [
+    [
+     {
+      "node": "Сделки из CRM",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Сделки из CRM": {
+   "main": [
+    [
+     {
+      "node": "Сводка",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Сводка": {
+   "main": [
+    [
+     {
+      "node": "Telegram: отчёт",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ },
+ "tags": [],
+ "pinData": {}
+}

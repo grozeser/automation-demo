@@ -1,0 +1,113 @@
+{
+ "id": "d80966923e59584b",
+ "versionId": "d8096692-3e59-584b-b02f-909087756d4a",
+ "name": "2. Заявка → Google Таблица",
+ "nodes": [
+  {
+   "id": "36cabdd8-6547-5fa9-90a7-99b1bb72ab02",
+   "name": "Заявка с формы",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 2,
+   "position": [
+    0,
+    300
+   ],
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "sheet",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "webhookId": "f4af8768-d22c-513e-af01-eb081a1925f6"
+  },
+  {
+   "id": "3ee4a2f4-648d-5091-9804-9da96cc547a8",
+   "name": "Строка для таблицы",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    220,
+    300
+   ],
+   "parameters": {
+    "jsCode": "// столбцы таблицы: дата, имя, телефон, источник рекламы, страница\nconst b = $input.first().json.body || {};\nconst now = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });\nreturn [{ json: { values: [now, b.name || '', b.phone || '', b.utm_source || 'прямой заход', b.page || '/'] } }];"
+   }
+  },
+  {
+   "id": "da8fe6de-03c8-54e2-8519-7653a2a07d47",
+   "name": "Добавить строку в таблицу",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    440,
+    300
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.SHEETS_URL }}/append",
+    "options": {},
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ sheet: 'Заявки', values: $json.values }) }}"
+   }
+  },
+  {
+   "id": "93fe15aa-92c1-5f3b-916f-c73f9a9680e2",
+   "name": "Ответ сайту",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1.1,
+   "position": [
+    660,
+    300
+   ],
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+    "options": {
+     "responseCode": 200
+    }
+   }
+  }
+ ],
+ "connections": {
+  "Заявка с формы": {
+   "main": [
+    [
+     {
+      "node": "Строка для таблицы",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Строка для таблицы": {
+   "main": [
+    [
+     {
+      "node": "Добавить строку в таблицу",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Добавить строку в таблицу": {
+   "main": [
+    [
+     {
+      "node": "Ответ сайту",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ },
+ "tags": [],
+ "pinData": {}
+}

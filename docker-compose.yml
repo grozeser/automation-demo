@@ -1,0 +1,35 @@
+# n8n со сценариями + заглушка CRM/Telegram/таблицы/почты. Редактор: http://localhost:5678
+services:
+  mock:
+    image: python:3.12-slim
+    volumes: [./mock:/app:ro]
+    command: python /app/app.py
+    ports: ["9000:9000"]  # журнал вызовов для check.py
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/_log')"]
+      interval: 3s
+      retries: 10
+
+  n8n:
+    image: n8nio/n8n:1.123.0
+    depends_on: { mock: { condition: service_healthy } }
+    ports: ["5678:5678"]
+    environment:
+      # адреса сервисов: в демо — заглушка, у клиента — его CRM, бот и таблица
+      CRM_URL: http://mock:9000/crm
+      TG_URL: http://mock:9000/tg/botDEMO
+      TG_CHAT: "-1001"
+      SHEETS_URL: http://mock:9000/sheets
+      MAIL_URL: http://mock:9000/mail
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      N8N_SECURE_COOKIE: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      GENERIC_TIMEZONE: Europe/Moscow
+    volumes: [./workflows:/workflows:ro]
+    # импорт сценариев при каждом старте и включение — так сценарии в git и в n8n всегда совпадают
+    entrypoint: ["sh", "-c", "n8n import:workflow --separate --input=/workflows && exec n8n start"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 5s
+      retries: 30

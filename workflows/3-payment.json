@@ -1,0 +1,216 @@
+{
+ "id": "c8a7ab45318a5d8b",
+ "versionId": "c8a7ab45-318a-5d8b-a81b-94970f018793",
+ "name": "3. Оплата → CRM → чек → Telegram",
+ "nodes": [
+  {
+   "id": "949c8333-6c88-591d-a883-c7f9e35bb7c4",
+   "name": "Уведомление об оплате",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 2,
+   "position": [
+    0,
+    300
+   ],
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "payment",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "webhookId": "47512390-8e5d-5577-840a-ef7e7ea4930f"
+  },
+  {
+   "id": "a77c0702-cf52-5a5b-8c3c-d93927e6acce",
+   "name": "Оплата прошла?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    220,
+    300
+   ],
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 2
+     },
+     "conditions": [
+      {
+       "id": "a77c0702-cf52-5a5b-8c3c-d93927e6acce",
+       "leftValue": "={{ $json.body.event }}",
+       "rightValue": "payment.succeeded",
+       "operator": {
+        "type": "string",
+        "operation": "equals"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "looseTypeValidation": true,
+    "options": {}
+   }
+  },
+  {
+   "id": "d3ab59ff-3619-5f59-870f-a773d08ec75c",
+   "name": "Сделка → «Оплачено»",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    440,
+    200
+   ],
+   "parameters": {
+    "method": "PATCH",
+    "url": "={{ $env.CRM_URL }}/leads/{{ $json.body.object.metadata.lead_id }}",
+    "options": {},
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ status: 'paid', paid: Number($json.body.object.amount.value) }) }}"
+   }
+  },
+  {
+   "id": "31ccfc59-9da5-5d17-8b27-af37a5411816",
+   "name": "Чек клиенту на почту",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    660,
+    200
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.MAIL_URL }}/send",
+    "options": {},
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ to: $('Уведомление об оплате').item.json.body.object.metadata.email, subject: 'Оплата получена', text: 'Спасибо! Получили ' + $('Уведомление об оплате').item.json.body.object.amount.value + ' ₽ по заказу №' + $('Уведомление об оплате').item.json.body.object.metadata.lead_id }) }}"
+   }
+  },
+  {
+   "id": "4f032a1c-a3b6-5ac0-aeaa-f96836169d0d",
+   "name": "Telegram: оплата",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    880,
+    200
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.TG_URL }}/sendMessage",
+    "options": {},
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ chat_id: $env.TG_CHAT, text: '💰 Оплата ' + $('Уведомление об оплате').item.json.body.object.amount.value + ' ₽ по сделке №' + $('Уведомление об оплате').item.json.body.object.metadata.lead_id }) }}"
+   }
+  },
+  {
+   "id": "28112ab6-0334-5532-b69e-1337c77cafa1",
+   "name": "Ответ: принято",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1.1,
+   "position": [
+    1100,
+    200
+   ],
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+    "options": {
+     "responseCode": 200
+    }
+   }
+  },
+  {
+   "id": "2586af1f-ba18-54e4-bcf1-5a5cea6d4c04",
+   "name": "Ответ: пропущено",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1.1,
+   "position": [
+    440,
+    420
+   ],
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: true, ignored: true }) }}",
+    "options": {
+     "responseCode": 200
+    }
+   }
+  }
+ ],
+ "connections": {
+  "Уведомление об оплате": {
+   "main": [
+    [
+     {
+      "node": "Оплата прошла?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Оплата прошла?": {
+   "main": [
+    [
+     {
+      "node": "Сделка → «Оплачено»",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Ответ: пропущено",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Сделка → «Оплачено»": {
+   "main": [
+    [
+     {
+      "node": "Чек клиенту на почту",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Чек клиенту на почту": {
+   "main": [
+    [
+     {
+      "node": "Telegram: оплата",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Telegram: оплата": {
+   "main": [
+    [
+     {
+      "node": "Ответ: принято",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ },
+ "tags": [],
+ "pinData": {}
+}

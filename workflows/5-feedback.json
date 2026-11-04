@@ -1,0 +1,187 @@
+{
+ "id": "c95940b3aec05da8",
+ "versionId": "c95940b3-aec0-5da8-b413-917ebaee209c",
+ "name": "5. Отзыв клиента → реакция",
+ "nodes": [
+  {
+   "id": "0142500b-4bb0-53c0-b770-19d1b0808a78",
+   "name": "Оценка от клиента",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 2,
+   "position": [
+    0,
+    300
+   ],
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "feedback",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "webhookId": "7aac6106-1e5c-5146-9626-8621d5b09981"
+  },
+  {
+   "id": "bc5eda26-7586-56d0-bbee-2b8bf4284b66",
+   "name": "Оценка 3 или ниже?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    220,
+    300
+   ],
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 2
+     },
+     "conditions": [
+      {
+       "id": "bc5eda26-7586-56d0-bbee-2b8bf4284b66",
+       "leftValue": "={{ Number($json.body.rating) }}",
+       "rightValue": 3,
+       "operator": {
+        "type": "number",
+        "operation": "lte"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "looseTypeValidation": true,
+    "options": {}
+   }
+  },
+  {
+   "id": "9076085f-e731-53d4-9bca-d83a22b76fea",
+   "name": "Тревога руководителю",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    440,
+    200
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.TG_URL }}/sendMessage",
+    "options": {},
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ chat_id: $env.TG_CHAT, text: '⚠️ Оценка ' + $('Оценка от клиента').item.json.body.rating + ' от ' + $('Оценка от клиента').item.json.body.name + ': ' + ($('Оценка от клиента').item.json.body.text || 'без текста') + '\\nПозвоните клиенту сегодня' }) }}"
+   }
+  },
+  {
+   "id": "f11eb768-1b27-55f3-81f9-d04fd06d485e",
+   "name": "Просьба об отзыве на картах",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    440,
+    420
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.MAIL_URL }}/send",
+    "options": {},
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ to: $('Оценка от клиента').item.json.body.email, subject: 'Спасибо за оценку!', text: 'Будем рады отзыву на Яндекс Картах: https://yandex.ru/maps/' }) }}"
+   }
+  },
+  {
+   "id": "e8ef1e58-8b72-5e36-a1a5-307de534413a",
+   "name": "Ответ: передано руководителю",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1.1,
+   "position": [
+    660,
+    200
+   ],
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: true, escalated: true }) }}",
+    "options": {
+     "responseCode": 200
+    }
+   }
+  },
+  {
+   "id": "6127b832-e489-5778-a49d-02668f06907d",
+   "name": "Ответ: спасибо",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1.1,
+   "position": [
+    660,
+    420
+   ],
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: true, escalated: false }) }}",
+    "options": {
+     "responseCode": 200
+    }
+   }
+  }
+ ],
+ "connections": {
+  "Оценка от клиента": {
+   "main": [
+    [
+     {
+      "node": "Оценка 3 или ниже?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Оценка 3 или ниже?": {
+   "main": [
+    [
+     {
+      "node": "Тревога руководителю",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Просьба об отзыве на картах",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Тревога руководителю": {
+   "main": [
+    [
+     {
+      "node": "Ответ: передано руководителю",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Просьба об отзыве на картах": {
+   "main": [
+    [
+     {
+      "node": "Ответ: спасибо",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ },
+ "tags": [],
+ "pinData": {}
+}

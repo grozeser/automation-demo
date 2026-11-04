@@ -1,0 +1,375 @@
+{
+ "id": "1f7dbbf2a9d954b7",
+ "versionId": "1f7dbbf2-a9d9-54b7-9b1d-f2079213477a",
+ "name": "1. Заявка с сайта → CRM → Telegram",
+ "nodes": [
+  {
+   "id": "997f94a8-8e20-5adb-bcb3-fa9541cd30e3",
+   "name": "Заявка с сайта",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 2,
+   "position": [
+    0,
+    300
+   ],
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "lead",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "webhookId": "70c237d0-b08d-5610-aeb4-147da4240dac"
+  },
+  {
+   "id": "8c50e1e6-6de7-57c2-bbb0-ec6a5296b4dd",
+   "name": "Проверка заявки",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    220,
+    300
+   ],
+   "parameters": {
+    "jsCode": "// телефон приводим к +7XXXXXXXXXX, без имени или с неполным номером заявку не принимаем\nconst b = $input.first().json.body || {};\nconst digits = String(b.phone || '').replace(/\\D/g, '');\nconst name = String(b.name || '').trim();\nreturn [{ json: {\n  valid: name.length > 0 && (digits.length === 10 || digits.length === 11),\n  name, phone: '+7' + digits.slice(-10), comment: String(b.comment || ''), source: b.source || 'сайт',\n} }];"
+   }
+  },
+  {
+   "id": "885cb976-2e80-590e-af33-650631139088",
+   "name": "Данные в порядке?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    440,
+    300
+   ],
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 2
+     },
+     "conditions": [
+      {
+       "id": "885cb976-2e80-590e-af33-650631139088",
+       "leftValue": "={{ $json.valid }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "looseTypeValidation": true,
+    "options": {}
+   }
+  },
+  {
+   "id": "5ffad92d-0952-5a19-b228-0604d0dcd10f",
+   "name": "Ошибка: нет имени или телефона",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1.1,
+   "position": [
+    660,
+    500
+   ],
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: false, error: \"нужны имя и телефон\" }) }}",
+    "options": {
+     "responseCode": 422
+    }
+   }
+  },
+  {
+   "id": "5b5513af-4544-56c0-a83b-746fab70e029",
+   "name": "Поиск клиента в CRM",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    660,
+    200
+   ],
+   "parameters": {
+    "method": "GET",
+    "url": "={{ $env.CRM_URL }}/leads",
+    "options": {},
+    "sendQuery": true,
+    "queryParameters": {
+     "parameters": [
+      {
+       "name": "phone",
+       "value": "={{ $json.phone }}"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "d321a5a8-2583-59d6-87c4-d69f62f37caf",
+   "name": "Клиент уже есть?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.2,
+   "position": [
+    880,
+    200
+   ],
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose",
+      "version": 2
+     },
+     "conditions": [
+      {
+       "id": "d321a5a8-2583-59d6-87c4-d69f62f37caf",
+       "leftValue": "={{ $json.items.length > 0 }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "looseTypeValidation": true,
+    "options": {}
+   }
+  },
+  {
+   "id": "12b7815a-9232-5223-945c-cbbdd513ce9c",
+   "name": "Заметка к сделке",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1100,
+    80
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.CRM_URL }}/leads/{{ $json.items[0].id }}/notes",
+    "options": {},
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ text: 'Повторная заявка: ' + ($('Проверка заявки').item.json.comment || 'без комментария') }) }}"
+   }
+  },
+  {
+   "id": "b61c381a-8c73-503b-8e7c-82d6e59946d1",
+   "name": "Telegram: повторная заявка",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1320,
+    80
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.TG_URL }}/sendMessage",
+    "options": {},
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ chat_id: $env.TG_CHAT, text: '🔁 Повторная заявка: ' + $('Проверка заявки').item.json.name + ', ' + $('Проверка заявки').item.json.phone }) }}"
+   }
+  },
+  {
+   "id": "25e635c2-2068-5b9d-a2cc-da1c219280ae",
+   "name": "Ответ: повторная",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1.1,
+   "position": [
+    1540,
+    80
+   ],
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: true, duplicate: true }) }}",
+    "options": {
+     "responseCode": 200
+    }
+   }
+  },
+  {
+   "id": "09864857-7bd2-57c7-98be-264520c4b3f0",
+   "name": "Новая сделка в CRM",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1100,
+    320
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.CRM_URL }}/leads",
+    "options": {},
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ name: $('Проверка заявки').item.json.name, phone: $('Проверка заявки').item.json.phone, comment: $('Проверка заявки').item.json.comment, source: $('Проверка заявки').item.json.source }) }}"
+   }
+  },
+  {
+   "id": "cc029b7f-f7a9-556a-ac3b-7ad1fda24c3d",
+   "name": "Telegram: новая заявка",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1320,
+    320
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $env.TG_URL }}/sendMessage",
+    "options": {},
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ chat_id: $env.TG_CHAT, text: '🔥 Новая заявка №' + $json.id + ': ' + $json.name + ', ' + $json.phone + ($json.comment ? '\\n' + $json.comment : '') }) }}"
+   }
+  },
+  {
+   "id": "2c7fb182-2871-5d4b-b26d-108f6960ecb4",
+   "name": "Ответ: принято",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1.1,
+   "position": [
+    1540,
+    320
+   ],
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: true, id: $('Новая сделка в CRM').item.json.id }) }}",
+    "options": {
+     "responseCode": 200
+    }
+   }
+  }
+ ],
+ "connections": {
+  "Заявка с сайта": {
+   "main": [
+    [
+     {
+      "node": "Проверка заявки",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Проверка заявки": {
+   "main": [
+    [
+     {
+      "node": "Данные в порядке?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Данные в порядке?": {
+   "main": [
+    [
+     {
+      "node": "Поиск клиента в CRM",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Ошибка: нет имени или телефона",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Поиск клиента в CRM": {
+   "main": [
+    [
+     {
+      "node": "Клиент уже есть?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Клиент уже есть?": {
+   "main": [
+    [
+     {
+      "node": "Заметка к сделке",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Новая сделка в CRM",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Заметка к сделке": {
+   "main": [
+    [
+     {
+      "node": "Telegram: повторная заявка",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Telegram: повторная заявка": {
+   "main": [
+    [
+     {
+      "node": "Ответ: повторная",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Новая сделка в CRM": {
+   "main": [
+    [
+     {
+      "node": "Telegram: новая заявка",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Telegram: новая заявка": {
+   "main": [
+    [
+     {
+      "node": "Ответ: принято",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "active": false,
+ "settings": {
+  "executionOrder": "v1"
+ },
+ "tags": [],
+ "pinData": {}
+}
